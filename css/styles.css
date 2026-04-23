@@ -17,17 +17,12 @@
   --max: 1120px;
   --header-h: 64px;
   --reveal-distance: 20px;
-  --reveal-duration: 0.65s;
-  --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --reveal-stagger-start: 1s;
-  --reveal-stagger-step: 0.2s;
-  --hero-load-base: 0.05s;
-  --hero-load-stagger-step: 0.12s;
+  --reveal-duration: 0.6s;
+  --reveal-ease: ease-out;
+  --reveal-stagger: 0.2s;
+  --hero-load-duration: 0.8s;
   --cta-bounce-duration: 0.45s;
   --cta-bounce-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --image-reveal-distance-x: 60px;
-  --image-reveal-duration: 0.7s;
-  --image-reveal-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --pricing-card-glow-duration: 3.6s;
   --pricing-card-glow-delay: 0s;
   --pricing-card-glow-blur: 26px;
@@ -248,17 +243,6 @@ img {
   }
 }
 
-@keyframes role-image-slide-reveal {
-  from {
-    opacity: 0;
-    transform: translateX(var(--image-offset-x, 0));
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 .get-started-cta:hover {
   animation: cta-bounce-y var(--cta-bounce-duration) var(--cta-bounce-ease);
 }
@@ -361,62 +345,27 @@ img {
 }
 
 /* Homepage reveal animations */
-body.animate-home .hero [data-hero-item] {
+body.animate-home .hero .hero__grid > * {
+  opacity: 0;
+  transition: opacity var(--hero-load-duration) var(--reveal-ease);
+}
+
+body.animate-home.is-loaded .hero .hero__grid > * {
+  opacity: 1;
+}
+
+body.animate-home .reveal-item {
   opacity: 0;
   transform: translateY(var(--reveal-distance));
   transition: opacity var(--reveal-duration) var(--reveal-ease),
     transform var(--reveal-duration) var(--reveal-ease);
+  transition-delay: var(--reveal-delay, 0s);
+  will-change: opacity, transform;
 }
 
-body.animate-home.is-loaded .hero [data-hero-item] {
+body.animate-home .reveal-item.is-visible {
   opacity: 1;
   transform: translateY(0);
-  transition-delay: calc(var(--hero-load-base) + (var(--hero-load-index, 0) * var(--hero-load-stagger-step)));
-}
-
-body.animate-home [data-reveal] {
-  opacity: 0;
-  transform: translateY(var(--reveal-distance));
-  transition: opacity var(--reveal-duration) var(--reveal-ease),
-    transform var(--reveal-duration) var(--reveal-ease);
-}
-
-body.animate-home [data-reveal].is-visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-body.animate-home [data-reveal] [data-stagger-item] {
-  opacity: 0;
-  transform: translateY(var(--reveal-distance));
-  transition: opacity var(--reveal-duration) var(--reveal-ease),
-    transform var(--reveal-duration) var(--reveal-ease);
-}
-
-body.animate-home [data-reveal].is-visible [data-stagger-item] {
-  opacity: 1;
-  transform: translateY(0);
-  transition-delay: calc(var(--reveal-stagger-start) + (var(--stagger-index, 0) * var(--reveal-stagger-step)));
-}
-
-body.animate-home .role-image-reveal {
-  opacity: 0;
-  transform: translateX(var(--image-offset-x, 0));
-  --image-reveal-delay: 0s;
-  will-change: transform, opacity;
-}
-
-body.animate-home .role-image-reveal.from-right {
-  --image-offset-x: var(--image-reveal-distance-x);
-}
-
-body.animate-home .role-image-reveal.from-left {
-  --image-offset-x: calc(var(--image-reveal-distance-x) * -1);
-}
-
-body.animate-home .role-image-reveal.is-visible {
-  animation: role-image-slide-reveal var(--image-reveal-duration) var(--image-reveal-ease)
-    var(--image-reveal-delay) forwards;
 }
 
 /* Sections */

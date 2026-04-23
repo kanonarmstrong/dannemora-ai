@@ -99,13 +99,15 @@
     const subscribeLinkEl = $("#pricing-subscribe-link");
     const featuresEl = $("#pricing-features");
 
+    const API = "https://api.dannemora.ai";
+
     const plans = {
       monthly: {
         tier: "Monthly",
         amountHtml: '<span class="price-card__primary-amount">$59</span><span style="font-size: 1rem; font-weight: 500">/mo</span>',
         note: "Monthly is higher cost. Switch to annual to save about $200/year for the same features.",
         savingsLabel: "Save ~$200/year by switching to annual",
-        checkoutUrl: "https://buy.stripe.com/checkout-placeholder-monthly",
+        planId: "monthly",
         features: ["Same stuff. You'll just pay more over time."],
       },
       annual: {
@@ -114,7 +116,7 @@
           '<span class="price-card__primary-amount price-card__primary-amount--glow">$42</span><span style="font-size: 1rem; font-weight: 500">/mo</span><span class="price-card__billing">$499 billed annually</span>',
         note: "Lowest effective monthly price for the same full feature set.",
         savingsLabel: "Best value: save ~$200/year on annual",
-        checkoutUrl: "https://buy.stripe.com/checkout-placeholder-annual",
+        planId: "annual",
         features: [
           "3 autonomous agents (TL, Dev, QA)",
           "Secure durable message bus",
@@ -126,15 +128,18 @@
       },
     };
 
+    let currentPlan = "annual";
+
     function setPlan(planKey) {
       const plan = plans[planKey];
       if (!plan || !tierEl || !amountEl || !noteEl || !savingsBadgeEl || !subscribeLinkEl) return;
 
+      currentPlan = planKey;
       tierEl.textContent = plan.tier;
       amountEl.innerHTML = plan.amountHtml;
       noteEl.textContent = plan.note;
       savingsBadgeEl.textContent = plan.savingsLabel;
-      subscribeLinkEl.href = plan.checkoutUrl;
+      subscribeLinkEl.href = "#";
       if (featuresEl) {
         featuresEl.innerHTML = (plan.features || [])
           .map((item) => `<li>${item}</li>`)
@@ -148,6 +153,33 @@
       });
     }
 
+    // Handle subscribe click — create Stripe checkout session via API
+    if (subscribeLinkEl) {
+      subscribeLinkEl.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const prevText = subscribeLinkEl.textContent;
+        subscribeLinkEl.textContent = "Redirecting...";
+        subscribeLinkEl.style.pointerEvents = "none";
+        try {
+          const resp = await fetch(`${API}/v1/checkout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ plan: currentPlan }),
+          });
+          const data = await resp.json();
+          if (data.checkout_url) {
+            window.location.href = data.checkout_url;
+          } else {
+            throw new Error(data.error || "Failed to create checkout session");
+          }
+        } catch (err) {
+          subscribeLinkEl.textContent = prevText;
+          subscribeLinkEl.style.pointerEvents = "";
+          window.alert("Something went wrong: " + err.message);
+        }
+      });
+    }
+
     billingToggles.forEach((btn) => {
       btn.addEventListener("click", () => setPlan(btn.getAttribute("data-billing-toggle")));
     });
@@ -158,20 +190,18 @@
 
   function setupHomepageRevealAnimations() {
     const hero = document.querySelector(".hero");
-    const agentsSection = document.querySelector("#agents");
-    if (!hero || !agentsSection) return;
+    if (!hero) return;
 
     document.body.classList.add("animate-home");
 
-    const heroItems = hero.querySelectorAll(".eyebrow, h1, .body-large, .get-started-cta, .hero__visual");
-    heroItems.forEach((el, index) => {
-      el.setAttribute("data-hero-item", "");
-      el.style.setProperty("--hero-load-index", index.toString());
+    const heroGrid = hero.querySelector(".hero__grid");
+    const heroItems = heroGrid ? Array.from(heroGrid.children) : [];
+    heroItems.forEach((el) => el.classList.add("hero-load-item"));
+
+    requestAnimationFrame(() => {
+      document.body.classList.add("is-loaded");
     });
 
-    const revealSections = document.querySelectorAll("main > section:not(.hero)");
-    const staggerSelector =
-      ".eyebrow, h1, h2, h3, h4, h5, h6, p, .feature-badge, .step-card__num, li, .btn, .card, pre";
     const rootStyles = getComputedStyle(document.documentElement);
     const parseTimeToSeconds = (value, fallback) => {
       if (!value) return fallback;
@@ -187,60 +217,77 @@
       const parsed = Number.parseFloat(normalized);
       return Number.isFinite(parsed) ? parsed : fallback;
     };
-    const staggerStartSeconds = parseTimeToSeconds(rootStyles.getPropertyValue("--reveal-stagger-start"), 1);
-    const staggerStepSeconds = parseTimeToSeconds(rootStyles.getPropertyValue("--reveal-stagger-step"), 0.2);
+    const revealStaggerSeconds = parseTimeToSeconds(rootStyles.getPropertyValue("--reveal-stagger"), 0.2);
 
-    revealSections.forEach((section) => {
-      section.setAttribute("data-reveal", "");
-      const staggerItems = section.querySelectorAll(staggerSelector);
-      staggerItems.forEach((item, index) => {
-        item.setAttribute("data-stagger-item", "");
-        item.style.setProperty("--stagger-index", index.toString());
-      });
+    const revealTargets = [];
+    const addRevealTarget = (element, delaySeconds = 0) => {
+      if (!element) return;
+      element.classList.add("reveal-item");
+      element.style.setProperty("--reveal-delay", `${delaySeconds.toFixed(3)}s`);
+      element.dataset.revealDelay = delaySeconds.toString();
+      revealTargets.push(element);
+    };
+
+    document.querySelectorAll("main > section:not(.hero) .section__head").forEach((head) => {
+      Array.from(head.children).forEach((child, index) => addRevealTarget(child, index * revealStaggerSeconds));
+    });
+    document.querySelectorAll("main > section:not(.hero) .cta-banner").forEach((banner) => addRevealTarget(banner, 0));
+
+    document.querySelectorAll(".feature-row").forEach((row) => {
+      const content = row.querySelector(".feature-row__content");
+      const textItems = content ? Array.from(content.children) : [];
+      textItems.forEach((item, index) => addRevealTarget(item, index * revealStaggerSeconds));
+
+      const roleImage = row.querySelector(".role-image-reveal");
+      const imageDelay = textItems.length * revealStaggerSeconds;
+      addRevealTarget(roleImage, imageDelay);
     });
 
-    requestAnimationFrame(() => {
-      document.body.classList.add("is-loaded");
-    });
+    const stepCards = Array.from(document.querySelectorAll(".steps .step-card"));
+    stepCards.forEach((card, index) => addRevealTarget(card, index * revealStaggerSeconds));
+
+    const revealDurationSeconds = parseTimeToSeconds(rootStyles.getPropertyValue("--reveal-duration"), 0.6);
+    const pendingTargets = new Set();
+    const revealQueue = [];
+    let isProcessingQueue = false;
+
+    const processQueue = () => {
+      if (isProcessingQueue || revealQueue.length === 0) return;
+      isProcessingQueue = true;
+
+      const target = revealQueue.shift();
+      target.classList.add("is-visible");
+
+      const delaySeconds = Number.parseFloat(target.dataset.revealDelay || "0") || 0;
+      const waitMs = Math.max(0, Math.round((delaySeconds + revealDurationSeconds) * 1000));
+
+      window.setTimeout(() => {
+        isProcessingQueue = false;
+        processQueue();
+      }, waitMs);
+    };
+
+    const enqueueTarget = (target) => {
+      if (pendingTargets.has(target) || target.classList.contains("is-visible")) return;
+      pendingTargets.add(target);
+      revealQueue.push(target);
+      processQueue();
+    };
 
     const observer = new IntersectionObserver(
       (entries, obs) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
-          entry.target.classList.add("is-visible");
+          enqueueTarget(entry.target);
           obs.unobserve(entry.target);
         });
       },
       {
-        threshold: 0.2,
-        rootMargin: "0px 0px -10% 0px",
+        threshold: 0.15,
       }
     );
 
-    revealSections.forEach((section) => observer.observe(section));
-
-    const roleImages = document.querySelectorAll(".role-image-reveal");
-    roleImages.forEach((img) => {
-      const imageSection = img.closest(".feature-row");
-      const sectionStaggerItems = imageSection ? imageSection.querySelectorAll(staggerSelector) : [];
-      const imageDelaySeconds = staggerStartSeconds + sectionStaggerItems.length * staggerStepSeconds;
-      img.style.setProperty("--image-reveal-delay", `${imageDelaySeconds.toFixed(3)}s`);
-    });
-
-    const imageObserver = new IntersectionObserver(
-      (entries, obs) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          entry.target.classList.add("is-visible");
-          obs.unobserve(entry.target);
-        });
-      },
-      {
-        threshold: 0.2,
-      }
-    );
-
-    roleImages.forEach((img) => imageObserver.observe(img));
+    revealTargets.forEach((target) => observer.observe(target));
   }
 
   setupHomepageRevealAnimations();
